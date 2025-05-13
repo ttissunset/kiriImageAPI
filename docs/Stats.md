@@ -290,6 +290,171 @@
 }
 ```
 
+### 5. 获取上传记录
+
+- **URL**: `/api/stats/upload-records`
+- **方法**: `GET`
+- **认证**: 需要 Bearer Token，且用户需具有管理员权限
+- **描述**: 获取系统中的文件上传记录，包括上传用户、文件数量、文件大小和文件类型等信息
+
+#### 请求参数
+
+| 参数名    | 类型   | 必选 | 描述                                  |
+| --------- | ------ | ---- | ------------------------------------- |
+| page      | number | 否   | 页码，默认为 1                        |
+| limit     | number | 否   | 每页记录数，默认为 20                 |
+| username  | string | 否   | 按上传用户名筛选                      |
+| fileType  | string | 否   | 按文件类型筛选，可选值: image, video  |
+| startDate | string | 否   | 开始日期，格式: YYYY-MM-DD            |
+| endDate   | string | 否   | 结束日期，格式: YYYY-MM-DD            |
+
+#### 响应示例
+
+```json
+{
+  "code": 200,
+  "message": "获取上传记录成功",
+  "data": {
+    "total": 68,
+    "items": [
+      {
+        "id": "c81d4e2e-bcf2-11e6-869b-7df92533d2db",
+        "userId": "550e8400-e29b-41d4-a716-446655440000",
+        "username": "admin",
+        "fileCount": 3,
+        "fileSize": 5242880,
+        "fileType": "image",
+        "ip": "203.0.113.1",
+        "region": "中国 北京",
+        "createdAt": "2023-06-15T10:30:45.000Z",
+        "updatedAt": "2023-06-15T10:30:45.000Z"
+      },
+      {
+        "id": "d92f3a1c-bcf2-11e6-8b45-6d29c8aab12b",
+        "userId": "7f8d3a20-5c1e-46d9-8f8b-36b7c8e71234",
+        "username": "user123",
+        "fileCount": 1,
+        "fileSize": 104857600,
+        "fileType": "video",
+        "ip": "198.51.100.42",
+        "region": "中国 上海",
+        "createdAt": "2023-06-15T09:15:30.000Z",
+        "updatedAt": "2023-06-15T09:15:30.000Z"
+      }
+    ],
+    "page": 1,
+    "limit": 20
+  }
+}
+```
+
+#### 错误响应
+
+##### 未认证或令牌无效
+
+```json
+{
+  "code": 401,
+  "message": "未提供身份验证令牌"
+}
+```
+
+或
+
+```json
+{
+  "code": 401,
+  "message": "身份验证令牌无效或已过期"
+}
+```
+
+##### 权限不足
+
+```json
+{
+  "code": 403,
+  "message": "权限不足，需要管理员权限"
+}
+```
+
+##### 服务器错误
+
+```json
+{
+  "code": 500,
+  "message": "服务器内部错误"
+}
+```
+
+### 6. 获取当日上传统计
+
+- **URL**: `/api/stats/today-uploads`
+- **方法**: `GET`
+- **认证**: 需要 Bearer Token，且用户需具有管理员权限
+- **描述**: 获取当日文件上传的汇总统计数据，包括文件总数、总大小、图片和视频的分布等
+
+#### 请求参数
+
+无需请求参数
+
+#### 响应示例
+
+```json
+{
+  "code": 200,
+  "message": "获取当日上传统计成功",
+  "data": {
+    "date": "2023-06-15",
+    "totalFiles": 28,
+    "totalSize": {
+      "bytes": 536870912,
+      "formatted": "512.00 MB"
+    },
+    "imageFiles": 24,
+    "videoFiles": 4,
+    "uploadCount": 15
+  }
+}
+```
+
+#### 错误响应
+
+##### 未认证或令牌无效
+
+```json
+{
+  "code": 401,
+  "message": "未提供身份验证令牌"
+}
+```
+
+或
+
+```json
+{
+  "code": 401,
+  "message": "身份验证令牌无效或已过期"
+}
+```
+
+##### 权限不足
+
+```json
+{
+  "code": 403,
+  "message": "权限不足，需要管理员权限"
+}
+```
+
+##### 服务器错误
+
+```json
+{
+  "code": 500,
+  "message": "服务器内部错误"
+}
+```
+
 ## 响应字段说明
 
 ### 系统信息
@@ -341,4 +506,31 @@
 | totalStorage.bytes     | 存储空间大小（字节）           |
 | totalStorage.formatted | 存储空间大小（格式化后的可读值）|
 | bucketName             | 存储桶名称                     |
+
+### 上传记录
+
+| 字段       | 描述                                   |
+| ---------- | -------------------------------------- |
+| id         | 记录唯一标识                           |
+| userId     | 上传用户ID                             |
+| username   | 上传用户名                             |
+| fileCount  | 上传文件数量                           |
+| fileSize   | 上传文件总大小（字节）                 |
+| fileType   | 文件类型（image或video）               |
+| ip         | 上传者IP地址                           |
+| region     | 上传者地区                             |
+| createdAt  | 记录创建时间                           |
+| updatedAt  | 记录更新时间                           |
+
+### 当日上传统计
+
+| 字段          | 描述                                |
+| ------------- | ----------------------------------- |
+| date          | 统计日期（YYYY-MM-DD格式）          |
+| totalFiles    | 上传文件总数                        |
+| totalSize.bytes | 上传文件总大小（字节）            |
+| totalSize.formatted | 上传文件总大小（格式化后的可读值）|
+| imageFiles    | 图片文件数量                        |
+| videoFiles    | 视频文件数量                        |
+| uploadCount   | 上传操作次数                        |
  

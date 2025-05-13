@@ -5,9 +5,11 @@ const LocationUtil = require("../utils/location.util");
 const UAParser = require("../utils/ua.parser");
 const LoginRecord = require("../model/login.record.model");
 const User = require("../model/user.model");
+const UploadRecord = require("../model/upload.record.model");
 const { r2Client } = require("../db/oss");
 const { R2_BUCKET_NAME } = require("../config/config");
 const { ListObjectsV2Command, GetBucketMetricsConfigurationCommand } = require('@aws-sdk/client-s3');
+const { Op } = require('sequelize');
 
 class StatsController {
   // 获取系统信息
@@ -268,6 +270,171 @@ class StatsController {
       ctx.body = {
         code: 500,
         message: "获取R2存储统计失败，请检查R2配置和连接状态"
+      };
+    }
+  }
+
+  /**
+   * 记录用户上传信息
+   * @param {Object} ctx - Koa上下文
+   * @param {Object} options - 配置选项
+   * @param {string} [options.userId] - 用户ID
+   * @param {string} options.username - 用户名
+   * @param {number} options.fileCount - 上传文件数量
+   * @param {number} options.fileSize - 上传文件大小(字节)
+   * @param {string} options.fileType - 文件类型(image或video)
+   * @returns {Promise<Object>} 上传记录对象
+   */
+  async recordUpload(ctx, options) {
+    try {
+      const { userId = null, username, fileCount = 1, fileSize, fileType } = options;
+      
+      // 获取IP和地理位置信息
+      const locationInfo = await LocationUtil.getCompleteLocationInfo();
+      
+      // 创建上传记录
+      const uploadRecord = await UploadRecord.create({
+        userId,
+        username,
+        fileCount,
+        fileSize,
+        fileType,
+        ip: locationInfo.ip,
+        region: locationInfo.region
+      });
+      
+      logger.info(`记录用户 ${username} 上传文件: ${fileCount}个, ${fileSize}字节, 类型:${fileType}`);
+      return uploadRecord;
+    } catch (error) {
+      logger.error(`记录上传信息失败: ${error.message}`);
+      // 这里只记录错误，不影响主流程
+      return null;
+    }
+  }
+  
+  /**
+   * 获取上传记录列表
+   * @param {Object} ctx - Koa上下文
+   */
+  async getUploadRecords(ctx) {
+    try {
+      const { page = 1, limit = 20, username, fileType, startDate, endDate } = ctx.query;
+      
+      // 构建查询条件
+      const where = {};
+      if (username) {
+        where.username = username;
+      }
+      if (fileType && ['image', 'video'].includes(fileType)) {
+        where.fileType = fileType;
+      }
+      
+      // 添加日期筛选
+      if (startDate || endDate) {
+        where.createdAt = {};
+        if (startDate) {
+          where.createdAt[Op.gte] = new Date(startDate);
+        }
+        if (endDate) {
+          const endDateTime = new Date(endDate);
+          endDateTime.setHours(23, 59, 59, 999); // 设置为当天结束时间
+          where.createdAt[Op.lte] = endDateTime;
+        }
+      }
+      
+      // 查询记录总数
+      const count = await UploadRecord.count({ where });
+      
+      // 分页查询记录
+      const offset = (page - 1) * limit;
+      const records = await UploadRecord.findAll({
+        where,
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        order: [['createdAt', 'DESC']]
+      });
+      
+      // 返回结果
+      ctx.body = {
+        code: 200,
+        message: "获取上传记录成功",
+        data: {
+          total: count,
+          items: records,
+          page: parseInt(page),
+          limit: parseInt(limit)
+        }
+      };
+    } catch (error) {
+      logger.error(`获取上传记录失败: ${error.message}`);
+      ctx.status = 500;
+      ctx.body = {
+        code: 500,
+        message: "服务器内部错误"
+      };
+    }
+  }
+  
+  /**
+   * 获取当日上传统计信息
+   * @param {Object} ctx - Koa上下文
+   */
+  async getTodayUploadStats(ctx) {
+    try {
+      // 获取今天的开始和结束时间
+      const today = new Date();
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
+      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+      
+      // 查询条件 - 今天的记录
+      const where = {
+        createdAt: {
+          [Op.between]: [startOfDay, endOfDay]
+        }
+      };
+      
+      // 获取所有上传记录
+      const records = await UploadRecord.findAll({ where });
+      
+      // 计算总文件数和总大小
+      let totalFiles = 0;
+      let totalSize = 0;
+      let imageFiles = 0;
+      let videoFiles = 0;
+      
+      records.forEach(record => {
+        totalFiles += record.fileCount;
+        totalSize += record.fileSize;
+        
+        if (record.fileType === 'image') {
+          imageFiles += record.fileCount;
+        } else if (record.fileType === 'video') {
+          videoFiles += record.fileCount;
+        }
+      });
+      
+      // 返回结果
+      ctx.body = {
+        code: 200,
+        message: "获取当日上传统计成功",
+        data: {
+          date: today.toISOString().split('T')[0],
+          totalFiles,
+          totalSize: {
+            bytes: totalSize,
+            formatted: formatFileSize(totalSize)
+          },
+          imageFiles,
+          videoFiles,
+          uploadCount: records.length // 上传操作次数
+        }
+      };
+    } catch (error) {
+      logger.error(`获取当日上传统计失败: ${error.message}`);
+      ctx.status = 500;
+      ctx.body = {
+        code: 500,
+        message: "服务器内部错误"
       };
     }
   }

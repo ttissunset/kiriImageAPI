@@ -10,6 +10,7 @@ const {
 } = require('../utils/storage');
 const seq = require('../db/seq');
 const logger = require('../utils/logger');
+const statsController = require('./stats.controller');
 
 class ImageController {
   // 获取图片列表
@@ -122,6 +123,24 @@ class ImageController {
         size: savedFile.fileSize,
         type: savedFile.fileType,
         userId: userId
+      });
+      
+      // 异步记录上传信息
+      process.nextTick(async () => {
+        try {
+          // 判断文件类型是图片还是视频
+          const fileType = savedFile.fileType.startsWith('image/') ? 'image' : 'video';
+          
+          await statsController.recordUpload(ctx, {
+            userId,
+            username: ctx.state.user.username,
+            fileCount: 1,
+            fileSize: savedFile.fileSize,
+            fileType
+          });
+        } catch (recordError) {
+          logger.error(`记录上传信息失败: ${recordError.message}`);
+        }
       });
       
       ctx.status = 200;
@@ -454,125 +473,141 @@ class ImageController {
   // 批量上传图片
   async batchUploadImages(ctx) {
     try {
-      // 获取数量参数
-      const { count = 10 } = ctx.request.query;
-      const maxCount = parseInt(count, 10);
-      
-      // 验证参数
-      if (isNaN(maxCount) || maxCount <= 0 || maxCount > 100) {
-        ctx.status = 400;
-        ctx.body = {
-          code: 400,
-          message: '数量参数必须是1-100之间的数字'
-        };
-        return;
-      }
-      
-      // 检查是否有文件上传
       const files = ctx.request.files.files;
-      if (!files) {
-        ctx.status = 400;
+      const userId = ctx.state.user ? ctx.state.user.id : null;
+      const { description } = ctx.request.body;
+      
+      // 检查是否已认证
+      if (!userId) {
+        ctx.status = 401;
         ctx.body = {
-          code: 400,
-          message: '没有上传任何文件'
+          code: 401,
+          message: '未登录，无法上传图片'
         };
         return;
       }
       
-      // 处理单个文件和多个文件的情况
+      // 确保 files 是数组
       const fileArray = Array.isArray(files) ? files : [files];
       
-      // 限制文件数量
-      const filesToProcess = fileArray.slice(0, maxCount);
-      console.log(`处理${filesToProcess.length}个文件，上传限制为${maxCount}`);
+      if (fileArray.length === 0) {
+        ctx.status = 400;
+        ctx.body = {
+          code: 400,
+          message: '请选择至少一个文件'
+        };
+        return;
+      }
       
-      // 处理描述和名称（如果提供）
-      const descriptions = ctx.request.body.descriptions || [];
-      const names = ctx.request.body.names || [];
-      
-      // 批量处理文件
-      const uploadPromises = filesToProcess.map(async (file, index) => {
-        // 检查文件类型
+      // 检查所有文件是否合规
+      for (const file of fileArray) {
         if (!checkFileType(file.mimetype)) {
-          return {
-            originalName: file.originalFilename,
-            success: false,
-            message: '不支持的文件类型'
+          ctx.status = 415;
+          ctx.body = {
+            code: 415,
+            message: `不支持的文件类型: ${file.originalFilename}`
           };
+          return;
         }
         
-        // 检查文件大小
         if (!checkFileSize(file.size)) {
-          return {
-            originalName: file.originalFilename,
-            success: false,
-            message: '文件体积超过限制'
+          ctx.status = 413;
+          ctx.body = {
+            code: 413,
+            message: `文件体积超过限制: ${file.originalFilename}`
           };
+          return;
         }
+      }
+      
+      // 使用事务确保数据一致性
+      const t = await seq.transaction();
+      
+      try {
+        const uploadResults = [];
+        let totalSize = 0;
+        let imageCount = 0;
+        let videoCount = 0;
         
-        try {
-          // 使用索引获取对应的名称和描述，如果存在的话
-          const name = names[index] || null;
-          const description = descriptions[index] || '';
-          
+        // 循环处理每个文件
+        for (const file of fileArray) {
           // 保存文件到R2云存储
-          const savedFile = await saveFileToR2(file, name);
+          const savedFile = await saveFileToR2(file);
+          totalSize += savedFile.fileSize;
+          
+          // 判断文件类型是图片还是视频
+          if (savedFile.fileType.startsWith('image/')) {
+            imageCount++;
+          } else if (savedFile.fileType.startsWith('video/')) {
+            videoCount++;
+          }
           
           // 创建图片记录
           const image = await Image.create({
             id: crypto.randomUUID(),
-            name: name || file.originalFilename,
-            description: description,
+            name: file.originalFilename,
+            description: description || '',
             url: savedFile.fileUrl,  // 使用R2返回的URL
             size: savedFile.fileSize,
             type: savedFile.fileType,
-            userId: ctx.state.user ? ctx.state.user.id : null
-          });
+            userId: userId
+          }, { transaction: t });
           
-          return {
-            id: image.id,
-            name: image.name,
-            url: image.url,  // 返回URL给前端直接使用
-            success: true
-          };
-        } catch (error) {
-          console.error('上传文件失败:', error);
-          return {
-            originalName: file.originalFilename,
-            success: false,
-            message: '处理文件时出错'
-          };
+          uploadResults.push(image);
         }
-      });
-      
-      // 等待所有上传完成
-      const results = await Promise.all(uploadPromises);
-      
-      // 统计成功和失败的数量
-      const successful = results.filter(result => result.success);
-      const failed = results.filter(result => !result.success);
-      
-      ctx.body = {
-        code: 200,
-        message: '批量上传处理完成',
-        data: {
-          total: results.length,
-          successful: {
-            count: successful.length,
-            items: successful
-          },
-          failed: {
-            count: failed.length,
-            items: failed
+        
+        // 提交事务
+        await t.commit();
+        
+        // 异步记录上传信息
+        process.nextTick(async () => {
+          try {
+            // 如果有图片文件，记录图片上传
+            if (imageCount > 0) {
+              await statsController.recordUpload(ctx, {
+                userId,
+                username: ctx.state.user.username,
+                fileCount: imageCount,
+                fileSize: totalSize, // 为简化，使用总大小
+                fileType: 'image'
+              });
+            }
+            
+            // 如果有视频文件，记录视频上传
+            if (videoCount > 0) {
+              await statsController.recordUpload(ctx, {
+                userId,
+                username: ctx.state.user.username,
+                fileCount: videoCount,
+                fileSize: totalSize, // 为简化，使用总大小
+                fileType: 'video'
+              });
+            }
+          } catch (recordError) {
+            logger.error(`记录批量上传信息失败: ${recordError.message}`);
           }
-        }
-      };
+        });
+        
+        ctx.status = 200;
+        ctx.body = {
+          code: 200,
+          message: '批量上传成功',
+          data: {
+            count: uploadResults.length,
+            items: uploadResults
+          }
+        };
+      } catch (error) {
+        // 回滚事务
+        await t.rollback();
+        throw error;
+      }
     } catch (error) {
-      console.error('批量上传图片出错:', error);
+      console.error('批量上传失败:', error);
       ctx.status = 500;
       ctx.body = {
         code: 500,
-        message: '批量上传图片失败: ' + error.message
+        message: '批量上传失败: ' + error.message
       };
     }
   }
