@@ -1,7 +1,7 @@
 const os = require('os');
 const si = require('systeminformation');
-const axios = require('axios');
 const logger = require("../utils/logger");
+const LocationUtil = require("../utils/location.util");
 
 class StatsController {
   // 获取系统信息
@@ -29,29 +29,8 @@ class StatsController {
         uptime: os.uptime()
       };
       
-      // 获取IP信息
-      let ipInfo = null;
-      try {
-        const ipResponse = await axios.get('https://api.ipify.org?format=json');
-        const ip = ipResponse.data.ip;
-        
-        // 获取地理位置信息
-        const geoResponse = await axios.get(`http://ip-api.com/json/${ip}`);
-        ipInfo = {
-          ip,
-          country: geoResponse.data.country,
-          countryCode: geoResponse.data.countryCode,
-          region: geoResponse.data.regionName,
-          city: geoResponse.data.city,
-          lat: geoResponse.data.lat,
-          lon: geoResponse.data.lon,
-          isp: geoResponse.data.isp,
-          timezone: geoResponse.data.timezone
-        };
-      } catch (error) {
-        logger.error(`获取IP信息失败: ${error.message}`);
-        ipInfo = { error: "无法获取IP信息" };
-      }
+      // 获取IP和地理位置信息
+      const locationInfo = await LocationUtil.getCompleteLocationInfo();
       
       // 构建简化的响应数据格式
       const systemInfo = {
@@ -63,9 +42,9 @@ class StatsController {
           usage: memoryUsage + '%'
         },
         os: `${osInfo.platform} ${osInfo.type} ${osInfo.arch}`,
-        ip: ipInfo && ipInfo.ip ? ipInfo.ip : "未知",
-        isp: ipInfo && ipInfo.isp ? ipInfo.isp : "未知",
-        region: ipInfo && ipInfo.country ? `${ipInfo.country} ${ipInfo.city || ipInfo.region || ""}` : "未知"
+        ip: locationInfo.ip,
+        isp: locationInfo.isp,
+        region: `${locationInfo.country} ${locationInfo.city || locationInfo.region || ""}`
       };
       
       // 返回系统信息
