@@ -43,6 +43,66 @@
 }
 ```
 
+### 2. 获取登录记录
+
+- **URL**: `/api/stats/login-records`
+- **方法**: `GET`
+- **认证**: 需要 Bearer Token，且用户需具有管理员权限
+- **描述**: 获取系统中的用户登录记录，包括登录成功和失败的记录
+
+#### 请求参数
+
+| 参数名   | 类型   | 必选 | 描述                                      |
+| -------- | ------ | ---- | ----------------------------------------- |
+| page     | number | 否   | 页码，默认为 1                            |
+| limit    | number | 否   | 每页记录数，默认为 20                     |
+| username | string | 否   | 按用户名筛选                              |
+| status   | string | 否   | 按登录状态筛选，可选值: success, failure |
+
+#### 响应示例
+
+```json
+{
+  "code": 200,
+  "message": "获取登录记录成功",
+  "data": {
+    "total": 126,
+    "items": [
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "userId": "user-12345",
+        "username": "admin",
+        "ip": "203.0.113.1",
+        "region": "中国 北京",
+        "isp": "中国电信",
+        "browser": "Chrome 92.0.4515.159",
+        "os": "Windows 10",
+        "status": "success",
+        "failReason": null,
+        "createdAt": "2023-06-10T08:15:30.000Z",
+        "updatedAt": "2023-06-10T08:15:30.000Z"
+      },
+      {
+        "id": "7f8d3a20-5c1e-46d9-8f8b-36b7c8e71234",
+        "userId": null,
+        "username": "user123",
+        "ip": "198.51.100.42",
+        "region": "中国 上海",
+        "isp": "中国移动",
+        "browser": "Firefox 89.0",
+        "os": "macOS 11.5.2",
+        "status": "failure",
+        "failReason": "密码错误",
+        "createdAt": "2023-06-10T07:42:15.000Z",
+        "updatedAt": "2023-06-10T07:42:15.000Z"
+      }
+    ],
+    "page": 1,
+    "limit": 20
+  }
+}
+```
+
 #### 错误响应
 
 ##### 未认证或令牌无效
@@ -87,31 +147,29 @@
 
 | 字段                | 描述              |
 | ------------------- | ----------------- |
-| cpu.manufacturer    | CPU 制造商        |
-| cpu.brand           | CPU 型号          |
-| cpu.speedMin        | CPU 最小频率(GHz) |
-| cpu.speedMax        | CPU 最大频率(GHz) |
-| cpu.cores           | CPU 总核心数      |
-| cpu.physicalCores   | CPU 物理核心数    |
-| gpu[].model         | GPU 型号          |
-| gpu[].vendor        | GPU 厂商          |
-| gpu[].vram          | GPU 显存(MB)      |
-| gpu[].driverVersion | GPU 驱动版本      |
+| cpu                 | CPU 信息          |
+| gpu                 | GPU 信息          |
 | memory.total        | 系统总内存        |
 | memory.used         | 已使用内存        |
 | memory.usage        | 内存使用率        |
-| os.platform         | 操作系统平台      |
-| os.type             | 操作系统类型      |
-| os.release          | 操作系统版本      |
-| os.arch             | 系统架构          |
-| os.hostname         | 主机名            |
-| os.uptime           | 系统运行时间(秒)  |
-| network.ip          | 服务器公网 IP     |
-| network.country     | 服务器所在国家    |
-| network.countryCode | 国家代码          |
-| network.region      | 所在地区          |
-| network.city        | 所在城市          |
-| network.lat         | 纬度              |
-| network.lon         | 经度              |
-| network.isp         | 互联网服务提供商  |
-| network.timezone    | 时区              |
+| os                  | 操作系统信息      |
+| ip                  | 服务器公网 IP     |
+| isp                 | 互联网服务提供商  |
+| region              | 所在地区          |
+
+### 登录记录
+
+| 字段       | 描述                             |
+| ---------- | -------------------------------- |
+| id         | 记录唯一标识                     |
+| userId     | 用户ID（登录失败时可能为空）     |
+| username   | 用户名                           |
+| ip         | 登录IP地址                       |
+| region     | 地区/城市                        |
+| isp        | 网络服务提供商                   |
+| browser    | 浏览器信息                       |
+| os         | 操作系统信息                     |
+| status     | 登录状态（success/failure）      |
+| failReason | 失败原因（登录成功时为null）     |
+| createdAt  | 记录创建时间                     |
+| updatedAt  | 记录更新时间                     |

@@ -3,6 +3,23 @@ const crypto = require("crypto");
 const User = require("../model/user.model");
 const TokenUtil = require("../utils/token.util");
 const logger = require("../utils/logger");
+const statsController = require("./stats.controller");
+
+/**
+ * 异步记录登录信息，不阻塞主流程
+ * @param {Object} ctx - Koa上下文
+ * @param {Object} options - 记录选项
+ */
+const recordLoginAsync = (ctx, options) => {
+  // 使用Promise包装，确保主流程不被阻塞
+  process.nextTick(async () => {
+    try {
+      await statsController.recordLogin(ctx, options);
+    } catch (error) {
+      logger.error(`异步记录登录信息失败: ${error.message}`);
+    }
+  });
+};
 
 class UserController {
   // 用户注册
@@ -69,19 +86,17 @@ class UserController {
 
       logger.info(`用户注册成功: ${username}`);
 
-      // 使用TokenUtil生成令牌
-      const token = TokenUtil.generateToken(userInfo);
-
-      // 返回结果
+      // 返回结果 - 不返回token
       ctx.status = 201;
       ctx.body = {
         code: 201,
-        message: "注册成功",
+        message: "注册成功，请登录",
         data: {
-          token,
           user: userInfo
         }
       };
+
+      // 注册时不记录信息
     } catch (err) {
       logger.error(`注册失败: ${err.message}`);
       ctx.status = 500;
@@ -104,6 +119,14 @@ class UserController {
           code: 400,
           message: "用户名和密码不能为空"
         };
+        
+        // 异步记录登录失败 - 参数错误
+        recordLoginAsync(ctx, {
+          username: username || '未提供用户名',
+          status: 'failure',
+          failReason: '用户名和密码不能为空'
+        });
+        
         return;
       }
 
@@ -119,6 +142,14 @@ class UserController {
           code: 404,
           message: "用户不存在"
         };
+        
+        // 异步记录登录失败 - 用户不存在
+        recordLoginAsync(ctx, {
+          username,
+          status: 'failure',
+          failReason: '用户不存在'
+        });
+        
         return;
       }
 
@@ -130,6 +161,14 @@ class UserController {
           code: 401,
           message: "密码错误"
         };
+        
+        // 异步记录登录失败 - 密码错误
+        recordLoginAsync(ctx, {
+          username,
+          status: 'failure',
+          failReason: '密码错误'
+        });
+        
         return;
       }
 
@@ -140,8 +179,8 @@ class UserController {
 
       // 使用TokenUtil生成令牌
       const token = TokenUtil.generateToken(userInfo);
-
-      // 返回结果
+      
+      // 先返回登录成功响应
       ctx.body = {
         code: 200,
         message: "登录成功",
@@ -150,13 +189,33 @@ class UserController {
           user: userInfo
         }
       };
+      
+      // 异步记录登录成功
+      recordLoginAsync(ctx, {
+        username,
+        userId: userInfo.id,
+        status: 'success'
+      });
     } catch (err) {
       logger.error(`登录失败: ${err.message}`);
+      
       ctx.status = 500;
       ctx.body = {
         code: 500,
         message: "服务器内部错误"
       };
+      
+      // 异步记录登录失败 - 系统错误
+      try {
+        const { username = '未知用户' } = ctx.request.body || {};
+        recordLoginAsync(ctx, {
+          username,
+          status: 'failure',
+          failReason: '服务器内部错误'
+        });
+      } catch (recordError) {
+        logger.error(`记录登录失败错误: ${recordError.message}`);
+      }
     }
   }
 

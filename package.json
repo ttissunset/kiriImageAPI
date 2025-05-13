@@ -30,6 +30,7 @@
     "openai": "^4.67.3",
     "sequelize": "6.33.0",
     "systeminformation": "^5.25.11",
+    "ua-parser-js": "^2.0.3",
     "useragent": "^2.3.0",
     "winston": "^3.17.0"
   },
