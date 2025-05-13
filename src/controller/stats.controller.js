@@ -5,6 +5,9 @@ const LocationUtil = require("../utils/location.util");
 const UAParser = require("../utils/ua.parser");
 const LoginRecord = require("../model/login.record.model");
 const User = require("../model/user.model");
+const { r2Client } = require("../db/oss");
+const { R2_BUCKET_NAME } = require("../config/config");
+const { ListObjectsV2Command, GetBucketMetricsConfigurationCommand } = require('@aws-sdk/client-s3');
 
 class StatsController {
   // 获取系统信息
@@ -220,6 +223,69 @@ class StatsController {
       };
     }
   }
+
+  /**
+   * 获取R2存储统计信息
+   * @param {Object} ctx - Koa上下文
+   */
+  async getR2Stats(ctx) {
+    try {
+      // 获取存储桶中的对象统计
+      const listCommand = new ListObjectsV2Command({
+        Bucket: R2_BUCKET_NAME,
+      });
+      
+      const listResponse = await r2Client.send(listCommand);
+      
+      // 计算总存储空间
+      let totalSize = 0;
+      let fileCount = 0;
+      
+      if (listResponse.Contents) {
+        fileCount = listResponse.Contents.length;
+        totalSize = listResponse.Contents.reduce((acc, obj) => acc + (obj.Size || 0), 0);
+      }
+      
+      // 格式化数据
+      const storageStats = {
+        totalFiles: fileCount,
+        totalStorage: {
+          bytes: totalSize,
+          formatted: formatFileSize(totalSize)
+        },
+        bucketName: R2_BUCKET_NAME
+      };
+      
+      // 返回结果
+      ctx.body = {
+        code: 200,
+        message: "获取R2存储统计成功",
+        data: storageStats
+      };
+    } catch (error) {
+      logger.error(`获取R2存储统计失败: ${error.message}`);
+      ctx.status = 500;
+      ctx.body = {
+        code: 500,
+        message: "获取R2存储统计失败，请检查R2配置和连接状态"
+      };
+    }
+  }
+}
+
+/**
+ * 格式化文件大小
+ * @param {number} bytes - 字节大小
+ * @returns {string} 格式化后的大小
+ */
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 module.exports = new StatsController(); 

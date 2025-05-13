@@ -234,6 +234,12 @@ class UserController {
         return;
       }
 
+      // 设置缓存控制头，禁止缓存用户信息
+      ctx.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      ctx.set('Pragma', 'no-cache');
+      ctx.set('Expires', '0');
+      ctx.set('Surrogate-Control', 'no-store');
+
       ctx.body = {
         code: 200,
         message: "获取用户信息成功",
@@ -298,6 +304,12 @@ class UserController {
       const { password: _, ...userInfo } = updatedUser.dataValues;
 
       logger.info(`用户信息更新成功: ${user.username}`, updateFields);
+
+      // 设置缓存控制头，禁止缓存用户信息
+      ctx.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      ctx.set('Pragma', 'no-cache');
+      ctx.set('Expires', '0');
+      ctx.set('Surrogate-Control', 'no-store');
 
       // 返回更新后的用户信息
       ctx.body = {
