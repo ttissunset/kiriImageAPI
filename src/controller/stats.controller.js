@@ -376,17 +376,30 @@ class StatsController {
   }
   
   /**
-   * 获取当日上传统计信息
+   * 获取指定日期上传统计信息
    * @param {Object} ctx - Koa上下文
    */
-  async getTodayUploadStats(ctx) {
+  async getDailyUploadStats(ctx) {
     try {
-      // 获取今天的开始和结束时间
-      const today = new Date();
-      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
-      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+      // 获取查询参数中的日期，如果未提供则使用今天的日期
+      const { date } = ctx.query;
+      const targetDate = date ? new Date(date) : new Date();
       
-      // 查询条件 - 今天的记录
+      // 如果日期无效，则返回错误
+      if (isNaN(targetDate.getTime())) {
+        ctx.status = 400;
+        ctx.body = {
+          code: 400,
+          message: "无效的日期格式，请使用YYYY-MM-DD格式"
+        };
+        return;
+      }
+      
+      // 获取目标日期的开始和结束时间
+      const startOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0);
+      const endOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59);
+      
+      // 查询条件 - 指定日期的记录
       const where = {
         createdAt: {
           [Op.between]: [startOfDay, endOfDay]
@@ -416,9 +429,9 @@ class StatsController {
       // 返回结果
       ctx.body = {
         code: 200,
-        message: "获取当日上传统计成功",
+        message: "获取日期上传统计成功",
         data: {
-          date: today.toISOString().split('T')[0],
+          date: targetDate.toISOString().split('T')[0],
           totalFiles,
           totalSize: {
             bytes: totalSize,
@@ -430,7 +443,7 @@ class StatsController {
         }
       };
     } catch (error) {
-      logger.error(`获取当日上传统计失败: ${error.message}`);
+      logger.error(`获取日期上传统计失败: ${error.message}`);
       ctx.status = 500;
       ctx.body = {
         code: 500,
