@@ -4,6 +4,7 @@ const logger = require("../utils/logger");
 const LocationUtil = require("../utils/location.util");
 const UAParser = require("../utils/ua.parser");
 const LoginRecord = require("../model/login.record.model");
+const User = require("../model/user.model");
 
 class StatsController {
   // 获取系统信息
@@ -150,6 +151,68 @@ class StatsController {
       };
     } catch (error) {
       logger.error(`获取登录记录失败: ${error.message}`);
+      ctx.status = 500;
+      ctx.body = {
+        code: 500,
+        message: "服务器内部错误"
+      };
+    }
+  }
+
+  /**
+   * 获取所有用户信息
+   * @param {Object} ctx - Koa上下文
+   */
+  async getAllUsers(ctx) {
+    try {
+      const { page = 1, limit = 20, keyword } = ctx.query;
+      
+      // 构建查询条件
+      const where = {};
+      if (keyword) {
+        where.username = {
+          [User.sequelize.Op.like]: `%${keyword}%`
+        };
+      }
+      
+      // 查询记录总数
+      const count = await User.count({ where });
+      
+      // 分页查询用户，只选择需要的字段
+      const offset = (page - 1) * limit;
+      const users = await User.findAll({
+        where,
+        attributes: ['id', 'username', 'isAdmin', 'avatar', 'createdAt'],
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        order: [['createdAt', 'DESC']]
+      });
+      
+      // 格式化用户信息
+      const formattedUsers = users.map(user => {
+        const userData = user.dataValues;
+        return {
+          id: userData.id,
+          username: userData.username,
+          role: userData.isAdmin ? 1 : 0, // 1表示管理员，0表示普通用户
+          avatar: userData.avatar,
+          createdAt: userData.createdAt
+        };
+      });
+      
+      // 返回结果
+      ctx.body = {
+        code: 200,
+        message: "获取用户列表成功",
+        data: {
+          total: count,
+          items: formattedUsers,
+          page: parseInt(page),
+          limit: parseInt(limit)
+        }
+      };
+    } catch (error) {
+      logger.error(`获取用户列表失败: ${error.message}`);
       ctx.status = 500;
       ctx.body = {
         code: 500,
