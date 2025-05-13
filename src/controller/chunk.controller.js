@@ -6,6 +6,7 @@ const fsPromises = require('fs').promises;
 const Image = require('../model/image.model');
 const { saveFileToR2 } = require('../utils/storage');
 const logger = require('../utils/logger');
+const statsController = require('./stats.controller');
 
 // 将一些fs操作转换为Promise
 const writeFile = promisify(fs.writeFile);
@@ -171,6 +172,7 @@ class ChunkController {
       // 获取合并参数
       const { fileHash, fileName, chunkTotal, fileMD5, description } = ctx.request.body;
       const userId = ctx.state.user ? ctx.state.user.id : null;
+      const username = ctx.state.user ? ctx.state.user.username : 'anonymous';
 
       // 参数验证
       if (!fileHash || !fileName || !chunkTotal) {
@@ -275,6 +277,17 @@ class ChunkController {
       // 将合并后的文件保存到R2
       const savedFile = await saveFileToR2(mergedFile, fileName);
       logger.info(`文件已上传到R2存储: fileName=${fileName}, url=${savedFile.fileUrl}, size=${savedFile.fileSize}字节`);
+
+      // 记录上传信息
+      const fileType = savedFile.fileType.startsWith('image/') ? 'image' : 'video';
+      await statsController.recordUpload(ctx, {
+        userId,
+        username,
+        fileCount: 1,
+        fileSize: savedFile.fileSize,
+        fileType
+      });
+      logger.info(`记录上传统计: 用户=${username}, 文件类型=${fileType}, 大小=${savedFile.fileSize}字节`);
 
       // 创建图片记录
       const image = await Image.create({
