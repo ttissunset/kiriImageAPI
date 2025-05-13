@@ -1,0 +1,56 @@
+const { DataTypes } = require("sequelize");
+const seq = require("../db/seq");
+
+const Image = seq.define("image", {
+  id: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    unique: true,
+    primaryKey: true,
+    comment: "图片唯一id",
+  },
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    comment: "图片名称",
+  },
+  description: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    comment: "图片描述",
+  },
+  url: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    comment: "图片URL",
+  },
+  size: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    comment: "图片大小（字节）",
+  },
+  type: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    comment: "文件类型",
+  },
+  userId: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    comment: "上传用户ID",
+  },
+  createdAt: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+    comment: "创建时间"
+  },
+  updatedAt: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+    comment: "更新时间"
+  }
+});
+
+// Image.sync({ force: true });
+
+module.exports = Image; 

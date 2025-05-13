@@ -1,0 +1,39 @@
+{
+  "name": "koa-kiriimage",
+  "version": "1.0.0",
+  "description": "在线相册",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon ./src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "kiri",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.806.0",
+    "@aws-sdk/s3-request-presigner": "^3.806.0",
+    "@koa/cors": "^5.0.0",
+    "axios": "^1.7.7",
+    "bcryptjs": "2.4.3",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.3.1",
+    "jsonwebtoken": "9.0.2",
+    "koa": "^2.14.2",
+    "koa-body": "^6.0.1",
+    "koa-bodyparser": "^4.4.1",
+    "koa-parameter": "3.0.1",
+    "koa-router": "^12.0.1",
+    "koa-static": "5.0.0",
+    "mysql2": "3.6.1",
+    "nodemailer": "^6.9.7",
+    "openai": "^4.67.3",
+    "sequelize": "6.33.0",
+    "systeminformation": "^5.25.11",
+    "useragent": "^2.3.0",
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
