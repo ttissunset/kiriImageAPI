@@ -119,14 +119,14 @@ class UserController {
           code: 400,
           message: "用户名和密码不能为空"
         };
-        
+
         // 异步记录登录失败 - 参数错误
         recordLoginAsync(ctx, {
           username: username || '未提供用户名',
           status: 'failure',
           failReason: '用户名和密码不能为空'
         });
-        
+
         return;
       }
 
@@ -142,14 +142,14 @@ class UserController {
           code: 404,
           message: "用户不存在"
         };
-        
+
         // 异步记录登录失败 - 用户不存在
         recordLoginAsync(ctx, {
           username,
           status: 'failure',
           failReason: '用户不存在'
         });
-        
+
         return;
       }
 
@@ -161,14 +161,14 @@ class UserController {
           code: 401,
           message: "密码错误"
         };
-        
+
         // 异步记录登录失败 - 密码错误
         recordLoginAsync(ctx, {
           username,
           status: 'failure',
           failReason: '密码错误'
         });
-        
+
         return;
       }
 
@@ -178,8 +178,10 @@ class UserController {
       logger.info(`用户登录成功: ${username}`);
 
       // 使用TokenUtil生成令牌
-      const token = TokenUtil.generateToken(userInfo);
-      
+      const token = TokenUtil.generateToken({
+        id: userInfo.id
+      });
+
       // 先返回登录成功响应
       ctx.body = {
         code: 200,
@@ -189,7 +191,7 @@ class UserController {
           user: userInfo
         }
       };
-      
+
       // 异步记录登录成功
       recordLoginAsync(ctx, {
         username,
@@ -198,13 +200,13 @@ class UserController {
       });
     } catch (err) {
       logger.error(`登录失败: ${err.message}`);
-      
+
       ctx.status = 500;
       ctx.body = {
         code: 500,
         message: "服务器内部错误"
       };
-      
+
       // 异步记录登录失败 - 系统错误
       try {
         const { username = '未知用户' } = ctx.request.body || {};
@@ -234,6 +236,23 @@ class UserController {
         return;
       }
 
+      // 从数据库中获取最新的用户信息
+      const latestUser = await User.findOne({
+        where: { id: user.id }
+      });
+
+      if (!latestUser) {
+        ctx.status = 404;
+        ctx.body = {
+          code: 404,
+          message: "用户不存在"
+        };
+        return;
+      }
+
+      // 排除敏感信息
+      const { password: _, ...userInfo } = latestUser.dataValues;
+
       // 设置缓存控制头，禁止缓存用户信息
       ctx.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       ctx.set('Pragma', 'no-cache');
@@ -243,7 +262,7 @@ class UserController {
       ctx.body = {
         code: 200,
         message: "获取用户信息成功",
-        data: user
+        data: userInfo
       };
     } catch (err) {
       logger.error(`获取用户信息失败: ${err.message}`);
