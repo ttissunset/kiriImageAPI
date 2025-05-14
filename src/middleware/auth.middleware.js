@@ -1,5 +1,6 @@
 const TokenUtil = require('../utils/token.util');
 const logger = require('../utils/logger');
+const User = require('../model/user.model');
 
 // 验证JWT令牌的中间件
 const auth = async (ctx, next) => {
@@ -34,8 +35,39 @@ const auth = async (ctx, next) => {
       return;
     }
 
-    // 从令牌中提取用户信息并存储到ctx.state.user中
-    ctx.state.user = TokenUtil.extractUserInfo(decoded);
+    // 从令牌中提取基本用户信息（主要是ID）
+    const basicUserInfo = TokenUtil.extractUserInfo(decoded);
+
+    if (!basicUserInfo || !basicUserInfo.id) {
+      logger.warn(`Token中没有包含有效的用户ID`);
+      ctx.status = 401;
+      ctx.body = {
+        code: 401,
+        message: '身份验证令牌无效'
+      };
+      return;
+    }
+
+    // 从数据库获取最新的用户信息
+    const user = await User.findOne({
+      where: { id: basicUserInfo.id }
+    });
+
+    if (!user) {
+      logger.warn(`ID为 ${basicUserInfo.id} 的用户不存在，可能已被删除`);
+      ctx.status = 401;
+      ctx.body = {
+        code: 401,
+        message: '用户不存在或已被删除'
+      };
+      return;
+    }
+
+    // 排除密码等敏感信息
+    const { password: _, ...userInfo } = user.dataValues;
+
+    // 将最新的用户信息存储到ctx.state.user中
+    ctx.state.user = userInfo;
 
     // 继续处理请求
     await next();
@@ -60,11 +92,12 @@ const adminAuth = async (ctx, next) => {
       return;
     }
 
-    // 检查用户是否为管理员
+    // auth中间件已经从数据库获取了最新的用户信息
     const { user } = ctx.state;
 
-    if (!user || !user.isAdmin) {
-      logger.warn(`非管理员用户 ${user ? user.username : '未知用户'} 尝试访问管理员专用接口`);
+    // 检查用户是否为管理员
+    if (!user.isAdmin) {
+      logger.warn(`非管理员用户 ${user.username} 尝试访问管理员专用接口`);
       ctx.status = 403;
       ctx.body = {
         code: 403,

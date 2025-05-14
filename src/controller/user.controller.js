@@ -441,11 +441,25 @@ class UserController {
         return;
       }
 
+      // 从数据库中获取最新的用户信息
+      const latestUser = await User.findOne({
+        where: { id: user.id }
+      });
+
+      if (!latestUser) {
+        ctx.status = 404;
+        ctx.body = {
+          code: 404,
+          message: "用户不存在"
+        };
+        return;
+      }
+
       ctx.body = {
         code: 200,
         message: "获取管理员状态成功",
         data: {
-          isAdmin: !!user.isAdmin
+          isAdmin: !!latestUser.isAdmin
         }
       };
     } catch (err) {
