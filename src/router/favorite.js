@@ -26,7 +26,4 @@ favoriteRouter.post('/batchAdd', auth, batchAddFavorites);
 // 批量取消收藏
 favoriteRouter.post('/batchRemove', auth, batchRemoveFavorites);
 
-// 检查收藏状态
-favoriteRouter.get('/status/:imageId', auth, checkFavoriteStatus);
-
 module.exports = favoriteRouter; 

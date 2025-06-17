@@ -516,7 +516,6 @@ class ImageController {
 
           // 创建图片记录
           const image = await Image.create({
-            id: crypto.randomUUID(),
             name: file.originalFilename,
             description: description || '',
             url: savedFile.fileUrl,  // 使用R2返回的URL

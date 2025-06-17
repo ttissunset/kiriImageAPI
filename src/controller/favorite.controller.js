@@ -178,7 +178,7 @@ class FavoriteController {
         });
 
         const existingImageMap = new Map(images.map(img => [img.id, img]));
-
+        
         for (const imageId of imageIds) {
           // 查找图片对象，支持数值ID和字符串ID
           let image = existingImageMap.get(imageId);
