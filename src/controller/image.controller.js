@@ -1,9 +1,9 @@
 const crypto = require('crypto');
 const Image = require('../model/image.model');
-const { 
-  saveFileToLocal, 
-  deleteLocalFile, 
-  checkFileType, 
+const {
+  saveFileToLocal,
+  deleteLocalFile,
+  checkFileType,
   checkFileSize,
   saveFileToR2,
   deleteFileFromStorage
@@ -17,8 +17,8 @@ class ImageController {
   async getImages(ctx) {
     try {
       const { page = 1, limit = 50, sort = 'date_desc' } = ctx.query;
-      const userId = ctx.state.user ? ctx.state.user.id : null;
-      
+      const userId = ctx.state.user.id;
+
       // 排序配置
       let order = [];
       switch (sort) {
@@ -36,10 +36,10 @@ class ImageController {
           order = [['createdAt', 'DESC']];
           break;
       }
-      
+
       // 查询条件，添加用户ID过滤
       const whereCondition = userId ? { userId } : {};
-      
+
       // 分页查询
       const offset = (parseInt(page) - 1) * parseInt(limit);
       const { count, rows } = await Image.findAndCountAll({
@@ -48,7 +48,7 @@ class ImageController {
         limit: parseInt(limit),
         order
       });
-      
+
       ctx.body = {
         code: 200,
         message: '获取图片列表成功',
@@ -63,24 +63,14 @@ class ImageController {
       ctx.app.emit('error', error, ctx);
     }
   }
-  
+
   // 上传图片
   async uploadImage(ctx) {
     try {
       const { file } = ctx.request.files;
       const { name, description } = ctx.request.body;
-      const userId = ctx.state.user ? ctx.state.user.id : null;
-      
-      // 检查是否已认证
-      if (!userId) {
-        ctx.status = 401;
-        ctx.body = {
-          code: 401,
-          message: '未登录，无法上传图片'
-        };
-        return;
-      }
-      
+      const userId = ctx.state.user.id;
+
       // 检查文件是否存在
       if (!file) {
         ctx.status = 400;
@@ -90,7 +80,7 @@ class ImageController {
         };
         return;
       }
-      
+
       // 检查文件类型
       if (!checkFileType(file.mimetype)) {
         ctx.status = 415;
@@ -100,7 +90,7 @@ class ImageController {
         };
         return;
       }
-      
+
       // 检查文件大小
       if (!checkFileSize(file.size)) {
         ctx.status = 413;
@@ -110,10 +100,10 @@ class ImageController {
         };
         return;
       }
-      
+
       // 保存文件到R2云存储
       const savedFile = await saveFileToR2(file, name);
-      
+
       // 创建图片记录
       const image = await Image.create({
         id: crypto.randomUUID(),
@@ -124,13 +114,13 @@ class ImageController {
         type: savedFile.fileType,
         userId: userId
       });
-      
+
       // 异步记录上传信息
       process.nextTick(async () => {
         try {
           // 判断文件类型是图片还是视频
           const fileType = savedFile.fileType.startsWith('image/') ? 'image' : 'video';
-          
+
           await statsController.recordUpload(ctx, {
             userId,
             username: ctx.state.user.username,
@@ -142,7 +132,7 @@ class ImageController {
           logger.error(`记录上传信息失败: ${recordError.message}`);
         }
       });
-      
+
       ctx.status = 200;
       ctx.body = {
         code: 200,
@@ -158,28 +148,18 @@ class ImageController {
       };
     }
   }
-  
+
   // 删除图片
   async deleteImage(ctx) {
     try {
       const { imageId } = ctx.params;
-      const userId = ctx.state.user ? ctx.state.user.id : null;
-      
-      // 检查是否已认证
-      if (!userId) {
-        ctx.status = 401;
-        ctx.body = {
-          code: 401,
-          message: '未登录，无法删除图片'
-        };
-        return;
-      }
-      
+      const userId = ctx.state.user.id;
+
       // 查找图片
       const image = await Image.findOne({
         where: { id: imageId }
       });
-      
+
       // 检查图片是否存在
       if (!image) {
         ctx.status = 404;
@@ -189,7 +169,7 @@ class ImageController {
         };
         return;
       }
-      
+
       // 检查是否有权限删除（只能删除自己的图片）
       if (image.userId !== userId) {
         ctx.status = 403;
@@ -199,29 +179,29 @@ class ImageController {
         };
         return;
       }
-      
+
       // 记录图片信息，用于日志和可能的回滚
       const imageInfo = {
         id: image.id,
         url: image.url,
         name: image.name
       };
-      
+
       // 使用事务确保数据一致性
       const t = await seq.transaction();
-      
+
       try {
         // 先删除数据库记录
         await image.destroy({ transaction: t });
-        
+
         // 再删除R2中的文件
         const storageResult = await deleteFileFromStorage(image.url);
-        
+
         // 如果存储删除成功，提交事务
         await t.commit();
-        
+
         logger.info(`图片删除成功 - ID: ${imageInfo.id}, 名称: ${imageInfo.name}`);
-        
+
         ctx.body = {
           code: 200,
           message: '图片删除成功'
@@ -229,9 +209,9 @@ class ImageController {
       } catch (storageError) {
         // 如果存储删除失败，回滚事务
         await t.rollback();
-        
+
         logger.error(`删除图片失败 - ID: ${imageInfo.id}, 错误: ${storageError.message}`);
-        
+
         ctx.status = 500;
         ctx.body = {
           code: 500,
@@ -247,17 +227,18 @@ class ImageController {
       };
     }
   }
-  
+
   // 批量删除图片
   async batchDeleteImages(ctx) {
     try {
       // 调试信息
       console.log('批量删除请求体:', JSON.stringify(ctx.request.body));
       console.log('请求内容类型:', ctx.request.headers['content-type']);
-      
+
       const { imageIds } = ctx.request.body;
+      const userId = ctx.state.user.id;
       console.log('解析后的imageIds:', imageIds);
-      
+
       // 增强参数验证
       if (!ctx.request.body) {
         console.log('请求体为空');
@@ -268,7 +249,7 @@ class ImageController {
         };
         return;
       }
-      
+
       if (!imageIds) {
         console.log('imageIds参数不存在');
         ctx.status = 400;
@@ -278,7 +259,7 @@ class ImageController {
         };
         return;
       }
-      
+
       if (!Array.isArray(imageIds)) {
         console.log('imageIds不是数组:', typeof imageIds);
         ctx.status = 400;
@@ -288,7 +269,7 @@ class ImageController {
         };
         return;
       }
-      
+
       if (imageIds.length === 0) {
         console.log('imageIds是空数组');
         ctx.status = 400;
@@ -298,12 +279,12 @@ class ImageController {
         };
         return;
       }
-      
+
       // 查找所有指定ID的图片
       const images = await Image.findAll({
         where: { id: imageIds }
       });
-      
+
       if (images.length === 0) {
         ctx.status = 404;
         ctx.body = {
@@ -312,26 +293,26 @@ class ImageController {
         };
         return;
       }
-      
+
       // 使用事务确保数据一致性
       const t = await seq.transaction();
-      
+
       try {
         // 记录删除结果
         const results = {
           success: [],
           failed: []
         };
-        
+
         // 对每张图片分别执行删除
         for (const image of images) {
           try {
             // 先删除数据库记录
             await image.destroy({ transaction: t });
-            
+
             // 再删除R2中的文件
             await deleteFileFromStorage(image.url);
-            
+
             // 记录成功
             results.success.push({
               id: image.id,
@@ -340,7 +321,7 @@ class ImageController {
           } catch (itemError) {
             // 单个图片删除失败，记录错误但继续处理其他图片
             logger.error(`批量删除中单个图片失败 - ID: ${image.id}, 错误: ${itemError.message}`);
-            
+
             results.failed.push({
               id: image.id,
               name: image.name,
@@ -348,7 +329,7 @@ class ImageController {
             });
           }
         }
-        
+
         // 如果有图片成功删除，提交事务，否则回滚
         if (results.success.length > 0) {
           await t.commit();
@@ -356,7 +337,7 @@ class ImageController {
         } else {
           await t.rollback();
           logger.error(`批量删除失败 - 所有图片删除都失败`);
-          
+
           ctx.status = 500;
           ctx.body = {
             code: 500,
@@ -367,7 +348,7 @@ class ImageController {
           };
           return;
         }
-        
+
         ctx.body = {
           code: 200,
           message: `批量删除处理完成，成功: ${results.success.length}, 失败: ${results.failed.length}`,
@@ -385,7 +366,7 @@ class ImageController {
       } catch (transactionError) {
         // 事务出错，回滚
         await t.rollback();
-        
+
         logger.error(`批量删除事务失败:`, transactionError);
         ctx.status = 500;
         ctx.body = {
@@ -402,18 +383,18 @@ class ImageController {
       };
     }
   }
-  
+
   // 更新图片信息
   async updateImage(ctx) {
     try {
       const { imageId } = ctx.params;
       const { name, description } = ctx.request.body;
-      
+
       // 查找图片
       const image = await Image.findOne({
         where: { id: imageId }
       });
-      
+
       // 检查图片是否存在
       if (!image) {
         ctx.status = 404;
@@ -423,13 +404,13 @@ class ImageController {
         };
         return;
       }
-      
+
       // 更新图片信息
       if (name) image.name = name;
       if (description !== undefined) image.description = description;
-      
+
       await image.save();
-      
+
       ctx.body = {
         code: 200,
         message: '图片信息更新成功',
@@ -439,17 +420,17 @@ class ImageController {
       ctx.app.emit('error', error, ctx);
     }
   }
-  
+
   // 获取图片详情
   async getImageDetails(ctx) {
     try {
       const { imageId } = ctx.params;
-      
+
       // 查找图片
       const image = await Image.findOne({
         where: { id: imageId }
       });
-      
+
       // 检查图片是否存在
       if (!image) {
         ctx.status = 404;
@@ -459,7 +440,7 @@ class ImageController {
         };
         return;
       }
-      
+
       ctx.body = {
         code: 200,
         message: '获取图片详情成功',
@@ -469,27 +450,17 @@ class ImageController {
       ctx.app.emit('error', error, ctx);
     }
   }
-  
+
   // 批量上传图片
   async batchUploadImages(ctx) {
     try {
       const files = ctx.request.files.files;
-      const userId = ctx.state.user ? ctx.state.user.id : null;
+      const userId = ctx.state.user.id;
       const { description } = ctx.request.body;
-      
-      // 检查是否已认证
-      if (!userId) {
-        ctx.status = 401;
-        ctx.body = {
-          code: 401,
-          message: '未登录，无法上传图片'
-        };
-        return;
-      }
-      
+
       // 确保 files 是数组
       const fileArray = Array.isArray(files) ? files : [files];
-      
+
       if (fileArray.length === 0) {
         ctx.status = 400;
         ctx.body = {
@@ -498,7 +469,7 @@ class ImageController {
         };
         return;
       }
-      
+
       // 检查所有文件是否合规
       for (const file of fileArray) {
         if (!checkFileType(file.mimetype)) {
@@ -509,7 +480,7 @@ class ImageController {
           };
           return;
         }
-        
+
         if (!checkFileSize(file.size)) {
           ctx.status = 413;
           ctx.body = {
@@ -519,29 +490,29 @@ class ImageController {
           return;
         }
       }
-      
+
       // 使用事务确保数据一致性
       const t = await seq.transaction();
-      
+
       try {
         const uploadResults = [];
         let totalSize = 0;
         let imageCount = 0;
         let videoCount = 0;
-        
+
         // 循环处理每个文件
         for (const file of fileArray) {
           // 保存文件到R2云存储
           const savedFile = await saveFileToR2(file);
           totalSize += savedFile.fileSize;
-          
+
           // 判断文件类型是图片还是视频
           if (savedFile.fileType.startsWith('image/')) {
             imageCount++;
           } else if (savedFile.fileType.startsWith('video/')) {
             videoCount++;
           }
-          
+
           // 创建图片记录
           const image = await Image.create({
             id: crypto.randomUUID(),
@@ -552,13 +523,13 @@ class ImageController {
             type: savedFile.fileType,
             userId: userId
           }, { transaction: t });
-          
+
           uploadResults.push(image);
         }
-        
+
         // 提交事务
         await t.commit();
-        
+
         // 异步记录上传信息
         process.nextTick(async () => {
           try {
@@ -572,7 +543,7 @@ class ImageController {
                 fileType: 'image'
               });
             }
-            
+
             // 如果有视频文件，记录视频上传
             if (videoCount > 0) {
               await statsController.recordUpload(ctx, {
@@ -587,7 +558,7 @@ class ImageController {
             logger.error(`记录批量上传信息失败: ${recordError.message}`);
           }
         });
-        
+
         ctx.status = 200;
         ctx.body = {
           code: 200,

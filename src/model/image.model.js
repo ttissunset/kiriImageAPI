@@ -48,9 +48,15 @@ const Image = seq.define("image", {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,
     comment: "更新时间"
+  },
+  favorite: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    comment: "是否为收藏"
   }
 });
 
-// Image.sync({ force: true });
+Image.sync({ force: true });
 
 module.exports = Image; 

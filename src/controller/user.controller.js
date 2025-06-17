@@ -301,15 +301,6 @@ class UserController {
       // 从认证中间件中获取用户信息
       const { user } = ctx.state;
 
-      if (!user) {
-        ctx.status = 401;
-        ctx.body = {
-          code: 401,
-          message: "未登录或登录已过期"
-        };
-        return;
-      }
-
       // 从数据库中获取最新的用户信息
       const latestUser = await User.findOne({
         where: { id: user.id }
@@ -353,15 +344,6 @@ class UserController {
     try {
       // 从认证中间件中获取用户信息
       const { user } = ctx.state;
-
-      if (!user) {
-        ctx.status = 401;
-        ctx.body = {
-          code: 401,
-          message: "未登录或登录已过期"
-        };
-        return;
-      }
 
       // 获取请求体中的数据
       const { nickname, avatar } = ctx.request.body;
@@ -425,15 +407,6 @@ class UserController {
     try {
       // 从认证中间件中获取用户信息
       const { user } = ctx.state;
-
-      if (!user) {
-        ctx.status = 401;
-        ctx.body = {
-          code: 401,
-          message: "未登录或登录已过期"
-        };
-        return;
-      }
 
       // 获取请求体中的数据
       const { oldPassword, newPassword } = ctx.request.body;
@@ -505,15 +478,6 @@ class UserController {
     try {
       // 从认证中间件中获取用户信息
       const { user } = ctx.state;
-
-      if (!user) {
-        ctx.status = 401;
-        ctx.body = {
-          code: 401,
-          message: "未登录或登录已过期"
-        };
-        return;
-      }
 
       // 从数据库中获取最新的用户信息
       const latestUser = await User.findOne({

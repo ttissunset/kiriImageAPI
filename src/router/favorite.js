@@ -1,26 +1,32 @@
 const Router = require('koa-router');
+const { auth } = require('../middleware/auth.middleware');
 const {
   getFavorites,
   addFavorite,
   removeFavorite,
-  batchRemoveFavorites,
   batchAddFavorites,
+  batchRemoveFavorites,
   checkFavoriteStatus
 } = require('../controller/favorite.controller');
-const { auth } = require('../middleware/auth.middleware');
 
-const router = new Router({ prefix: '/api/favorite' });
+const favoriteRouter = new Router({ prefix: '/favorites' });
 
-// 所有收藏夹操作都需要认证
-router.get('/list', auth, getFavorites);
-router.post('/add/:imageId', auth, addFavorite);
-router.delete('/remove/:imageId', auth, removeFavorite);
-router.get('/status/:imageId', auth, checkFavoriteStatus);
+// 获取收藏列表
+favoriteRouter.get('/', auth, getFavorites);
+
+// 添加到收藏
+favoriteRouter.post('/:imageId', auth, addFavorite);
+
+// 从收藏中删除
+favoriteRouter.delete('/:imageId', auth, removeFavorite);
 
 // 批量添加收藏
-router.post('/batch', auth, batchAddFavorites);
+favoriteRouter.post('/batchAdd', auth, batchAddFavorites);
 
 // 批量取消收藏
-router.delete('/batch', auth, batchRemoveFavorites);
+favoriteRouter.post('/batchRemove', auth, batchRemoveFavorites);
 
-module.exports = router; 
+// 检查收藏状态
+favoriteRouter.get('/status/:imageId', auth, checkFavoriteStatus);
+
+module.exports = favoriteRouter; 

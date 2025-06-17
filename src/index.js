@@ -16,9 +16,6 @@ app.proxy = true;
 // 从环境变量中获取端口
 const { APP_PORT } = require("./config/config");
 
-// 导入数据库模型关联
-require('./model/association');
-
 const router = require("./router/index");
 
 // 使用koda-body中间件对body参数进行处理

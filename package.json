@@ -29,6 +29,7 @@
     "nodemailer": "^6.9.7",
     "openai": "^4.67.3",
     "sequelize": "6.33.0",
+    "sharp": "^0.34.2",
     "systeminformation": "^5.25.11",
     "ua-parser-js": "^2.0.3",
     "useragent": "^2.3.0",
