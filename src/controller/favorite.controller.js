@@ -50,7 +50,7 @@ class FavoriteController {
 
       // 检查图片是否存在并获取图片信息
       const image = await Image.findOne({
-        where: { id: imageId }
+        where: { id: imageId, userId }
       });
 
       if (!image) {
@@ -126,7 +126,7 @@ class FavoriteController {
       // 更新Image表的favorite字段
       await Image.update(
         { favorite: false },
-        { where: { id: imageId } }
+        { where: { id: imageId, userId } }
       );
 
       logger.info(`删除收藏成功 - ImageID: ${imageId}`);
@@ -180,7 +180,21 @@ class FavoriteController {
         const existingImageMap = new Map(images.map(img => [img.id, img]));
 
         for (const imageId of imageIds) {
-          const image = existingImageMap.get(imageId);
+          // 查找图片对象，支持数值ID和字符串ID
+          let image = existingImageMap.get(imageId);
+          
+          // 如果找不到，尝试转换类型再查找
+          if (!image) {
+            // 如果imageId是字符串，尝试转为数字
+            if (typeof imageId === 'string') {
+              image = existingImageMap.get(parseInt(imageId));
+            } 
+            // 如果imageId是数字，尝试转为字符串
+            else if (typeof imageId === 'number') {
+              image = existingImageMap.get(String(imageId));
+            }
+          }
+
           if (!image) {
             results.invalid.push({ imageId, error: '图片不存在或不属于当前用户' });
           } else if (image.favorite) {
@@ -190,7 +204,7 @@ class FavoriteController {
               // 2. 批量更新Image表的favorite字段
               await Image.update(
                 { favorite: true },
-                { where: { id: imageId }, transaction: t }
+                { where: { id: imageId, userId }, transaction: t }
               );
               results.succeeded.push({ imageId, message: '收藏成功' });
             } catch (updateError) {
@@ -261,7 +275,21 @@ class FavoriteController {
         const existingImageMap = new Map(images.map(img => [img.id, img]));
 
         for (const imageId of imageIds) {
-          const image = existingImageMap.get(imageId);
+          // 查找图片对象，支持数值ID和字符串ID
+          let image = existingImageMap.get(imageId);
+          
+          // 如果找不到，尝试转换类型再查找
+          if (!image) {
+            // 如果imageId是字符串，尝试转为数字
+            if (typeof imageId === 'string') {
+              image = existingImageMap.get(parseInt(imageId));
+            } 
+            // 如果imageId是数字，尝试转为字符串
+            else if (typeof imageId === 'number') {
+              image = existingImageMap.get(String(imageId));
+            }
+          }
+
           if (!image) {
             results.invalid.push({ imageId, error: '图片不存在或不属于当前用户' });
           } else if (!image.favorite) {
@@ -271,7 +299,7 @@ class FavoriteController {
               // 2. 批量更新Image表的favorite字段
               await Image.update(
                 { favorite: false },
-                { where: { id: imageId }, transaction: t }
+                { where: { id: imageId, userId }, transaction: t }
               );
               results.succeeded.push({ imageId, message: '取消收藏成功' });
             } catch (updateError) {

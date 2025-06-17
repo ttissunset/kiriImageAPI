@@ -4,14 +4,6 @@ const { DataTypes } = require("sequelize");
 const seq = require("../db/seq");
 
 const LoginRecord = seq.define("login_record", {
-  id: {
-    type: DataTypes.UUID,
-    defaultValue: DataTypes.UUIDV4,
-    allowNull: false,
-    unique: true,
-    primaryKey: true,
-    comment: "记录唯一id",
-  },
   userId: {
     type: DataTypes.STRING,
     allowNull: true,

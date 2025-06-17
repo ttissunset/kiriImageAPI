@@ -4,13 +4,6 @@ const { DataTypes } = require("sequelize");
 const seq = require("../db/seq");
 
 const User = seq.define("user", {
-  id: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    unique: true,
-    primaryKey: true,
-    comment: "用户唯一id",
-  },
   username: {
     type: DataTypes.STRING,
     allowNull: false,
@@ -21,11 +14,6 @@ const User = seq.define("user", {
     type: DataTypes.STRING,
     allowNull: false,
     comment: "密码",
-  },
-  nickname: {
-    type: DataTypes.STRING,
-    allowNull: true,
-    comment: "昵称",
   },
   avatar: {
     type: DataTypes.STRING,

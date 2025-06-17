@@ -2,13 +2,6 @@ const { DataTypes } = require("sequelize");
 const seq = require("../db/seq");
 
 const Image = seq.define("image", {
-  id: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    unique: true,
-    primaryKey: true,
-    comment: "图片唯一id",
-  },
   name: {
     type: DataTypes.STRING,
     allowNull: false,
@@ -57,6 +50,6 @@ const Image = seq.define("image", {
   }
 });
 
-Image.sync({ force: true });
+// Image.sync({ force: true });
 
 module.exports = Image; 

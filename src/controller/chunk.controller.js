@@ -275,7 +275,7 @@ class ChunkController {
       };
 
       // 将合并后的文件保存到R2
-      const savedFile = await saveFileToR2(mergedFile, fileName);
+      const savedFile = await saveFileToR2(mergedFile, fileName, username);
       logger.info(`文件已上传到R2存储: fileName=${fileName}, url=${savedFile.fileUrl}, size=${savedFile.fileSize}字节`);
 
       // 记录上传信息
@@ -289,9 +289,8 @@ class ChunkController {
       });
       logger.info(`记录上传统计: 用户=${username}, 文件类型=${fileType}, 大小=${savedFile.fileSize}字节`);
 
-      // 创建图片记录
+      // 创建记录
       const image = await Image.create({
-        id: crypto.randomUUID(),
         name: fileName,
         description: description || '',
         url: savedFile.fileUrl,

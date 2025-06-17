@@ -27,14 +27,14 @@ class UserController {
   // 用户注册
   async register(ctx) {
     try {
-      const { username, password, nickname, email } = ctx.request.body;
+      const { username, password, email } = ctx.request.body;
 
       // 参数验证
-      if (!username || !password) {
+      if (!username || !password || !email) {
         ctx.status = 400;
         ctx.body = {
           code: 400,
-          message: "用户名和密码不能为空"
+          message: "用户名、密码和邮箱不能为空"
         };
         return;
       }
@@ -43,7 +43,6 @@ class UserController {
       const existUser = await User.findOne({
         where: { username }
       });
-
       if (existUser) {
         ctx.status = 409;
         ctx.body = {
@@ -53,20 +52,17 @@ class UserController {
         return;
       }
 
-      // 检查邮箱是否已存在(如果提供了邮箱)
-      if (email) {
-        const existEmail = await User.findOne({
-          where: { email }
-        });
-
-        if (existEmail) {
-          ctx.status = 409;
-          ctx.body = {
-            code: 409,
-            message: "邮箱已被使用"
-          };
-          return;
-        }
+      // 检查邮箱是否已存在
+      const existEmail = await User.findOne({
+        where: { email }
+      });
+      if (existEmail) {
+        ctx.status = 409;
+        ctx.body = {
+          code: 409,
+          message: "邮箱已被使用"
+        };
+        return;
       }
 
       // 密码加密
@@ -75,10 +71,8 @@ class UserController {
 
       // 创建用户记录
       const newUser = await User.create({
-        id: crypto.randomUUID(),
         username,
         password: hashedPassword,
-        nickname: nickname || username,
         email: email || null,
         avatar: "https://kirii.online/6.jpg.jpg" // 默认头像
       });
@@ -254,7 +248,11 @@ class UserController {
       // 使用TokenUtil生成令牌
       const token = TokenUtil.generateToken({
         id: userInfo.id
-      });
+      }, '1d'); // 设置token有效期为1天
+
+      // 登录成功后，将用户id保存到ctx.state.user.id上
+      ctx.state.user = ctx.state.user || {};
+      ctx.state.user.id = userInfo.id;
 
       // 先返回登录成功响应
       ctx.body = {
@@ -318,12 +316,6 @@ class UserController {
       // 排除敏感信息
       const { password: _, ...userInfo } = latestUser.dataValues;
 
-      // 设置缓存控制头，禁止缓存用户信息
-      ctx.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-      ctx.set('Pragma', 'no-cache');
-      ctx.set('Expires', '0');
-      ctx.set('Surrogate-Control', 'no-store');
-
       ctx.body = {
         code: 200,
         message: "获取用户信息成功",
@@ -346,13 +338,13 @@ class UserController {
       const { user } = ctx.state;
 
       // 获取请求体中的数据
-      const { nickname, avatar } = ctx.request.body;
+      const { username, avatar } = ctx.request.body;
 
       // 要更新的字段
       const updateFields = {};
 
       // 仅更新提供的字段
-      if (nickname !== undefined) updateFields.nickname = nickname;
+      if (username !== undefined) updateFields.username = username;
       if (avatar !== undefined) updateFields.avatar = avatar;
 
       // 如果没有任何要更新的字段
@@ -379,12 +371,6 @@ class UserController {
       const { password: _, ...userInfo } = updatedUser.dataValues;
 
       logger.info(`用户信息更新成功: ${user.username}`, updateFields);
-
-      // 设置缓存控制头，禁止缓存用户信息
-      ctx.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-      ctx.set('Pragma', 'no-cache');
-      ctx.set('Expires', '0');
-      ctx.set('Surrogate-Control', 'no-store');
 
       // 返回更新后的用户信息
       ctx.body = {

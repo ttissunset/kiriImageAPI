@@ -3,12 +3,6 @@ const sequelize = require('../db/seq');
 
 // 上传记录模型
 const UploadRecord = sequelize.define('upload_record', {
-  id: {
-    type: DataTypes.UUID,
-    primaryKey: true,
-    defaultValue: DataTypes.UUIDV4,
-    allowNull: false
-  },
   userId: {
     type: DataTypes.UUID,
     allowNull: true,
@@ -52,7 +46,7 @@ const UploadRecord = sequelize.define('upload_record', {
 });
 
 // 同步模型到数据库（如果表不存在则创建）
-// UploadRecord.sync({ alter: true })
+// UploadRecord.sync({ force: true })
 //   .then(() => console.log('上传记录表同步成功'))
 //   .catch(err => console.error('上传记录表同步失败:', err));
 

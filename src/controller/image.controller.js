@@ -38,7 +38,7 @@ class ImageController {
       }
 
       // 查询条件，添加用户ID过滤
-      const whereCondition = userId ? { userId } : {};
+      const whereCondition = { userId };
 
       // 分页查询
       const offset = (parseInt(page) - 1) * parseInt(limit);
@@ -102,11 +102,10 @@ class ImageController {
       }
 
       // 保存文件到R2云存储
-      const savedFile = await saveFileToR2(file, name);
+      const savedFile = await saveFileToR2(file, name, ctx.state.user.username);
 
       // 创建图片记录
       const image = await Image.create({
-        id: crypto.randomUUID(),
         name: name || file.originalFilename,
         description: description || '',
         url: savedFile.fileUrl,  // 使用R2返回的URL
@@ -389,10 +388,11 @@ class ImageController {
     try {
       const { imageId } = ctx.params;
       const { name, description } = ctx.request.body;
+      const userId = ctx.state.user.id;
 
-      // 查找图片
+      // 查找图片，增加 userId 校验
       const image = await Image.findOne({
-        where: { id: imageId }
+        where: { id: imageId, userId }
       });
 
       // 检查图片是否存在
@@ -425,10 +425,11 @@ class ImageController {
   async getImageDetails(ctx) {
     try {
       const { imageId } = ctx.params;
+      const userId = ctx.state.user.id;
 
-      // 查找图片
+      // 查找图片，增加 userId 校验
       const image = await Image.findOne({
-        where: { id: imageId }
+        where: { id: imageId, userId }
       });
 
       // 检查图片是否存在
@@ -503,7 +504,7 @@ class ImageController {
         // 循环处理每个文件
         for (const file of fileArray) {
           // 保存文件到R2云存储
-          const savedFile = await saveFileToR2(file);
+          const savedFile = await saveFileToR2(file, null, ctx.state.user.username);
           totalSize += savedFile.fileSize;
 
           // 判断文件类型是图片还是视频

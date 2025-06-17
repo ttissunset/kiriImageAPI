@@ -29,7 +29,7 @@ const checkFileSize = (fileSize) => {
 };
 
 // 保存文件到R2对象存储
-const saveFileToR2 = async (file, customName = null) => {
+const saveFileToR2 = async (file, customName = null, username = null) => {
   try {
     // 生成文件名
     let fileName;
@@ -45,8 +45,11 @@ const saveFileToR2 = async (file, customName = null) => {
       fileName = generateTimestampFileName(file.originalFilename);
     }
     
-    // 直接使用文件名作为key，存储在bucket根目录
-    const key = fileName;
+    // 新增：如果有 username，则存储到 username/filename 路径下
+    let key = fileName;
+    if (username) {
+      key = `${username}/${fileName}`;
+    }
     
     // 读取文件内容
     const fileContent = fs.readFileSync(file.filepath);
