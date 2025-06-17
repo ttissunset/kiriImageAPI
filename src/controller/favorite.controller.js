@@ -163,58 +163,48 @@ class FavoriteController {
       }
 
       const t = await seq.transaction();
-      const results = {
-        succeeded: [],
-        skipped: [], // 已收藏的图片
-        invalid: [], // 不存在的图片
-        failed: []   // 更新失败的图片
-      };
-
+      
       try {
-        // 1. 查找所有指定ID的图片
+        // 查询所有指定ID的图片
         const images = await Image.findAll({
-          where: { id: imageIds, userId: userId }, // 确保只操作当前用户的图片
+          where: { id: imageIds, userId },
           transaction: t
         });
 
-        const existingImageMap = new Map(images.map(img => [img.id, img]));
+        // 处理ID类型兼容性，转换所有ID为字符串进行比对
+        const foundImageIds = images.map(img => String(img.id));
+        const inputImageIds = imageIds.map(id => String(id));
         
-        for (const imageId of imageIds) {
-          // 查找图片对象，支持数值ID和字符串ID
-          let image = existingImageMap.get(imageId);
-          
-          // 如果找不到，尝试转换类型再查找
-          if (!image) {
-            // 如果imageId是字符串，尝试转为数字
-            if (typeof imageId === 'string') {
-              image = existingImageMap.get(parseInt(imageId));
-            } 
-            // 如果imageId是数字，尝试转为字符串
-            else if (typeof imageId === 'number') {
-              image = existingImageMap.get(String(imageId));
-            }
-          }
+        // 找出不存在的图片ID
+        const invalidImageIds = inputImageIds.filter(id => !foundImageIds.includes(id));
+        
+        // 识别已收藏和未收藏的图片
+        const favoriteImages = images.filter(img => img.favorite);
+        const nonFavoriteImages = images.filter(img => !img.favorite);
+        
+        const favoriteImageIds = favoriteImages.map(img => img.id);
+        const nonFavoriteImageIds = nonFavoriteImages.map(img => img.id);
 
-          if (!image) {
-            results.invalid.push({ imageId, error: '图片不存在或不属于当前用户' });
-          } else if (image.favorite) {
-            results.skipped.push({ imageId, message: '图片已收藏' });
-          } else {
-            try {
-              // 2. 批量更新Image表的favorite字段
-              await Image.update(
-                { favorite: true },
-                { where: { id: imageId, userId }, transaction: t }
-              );
-              results.succeeded.push({ imageId, message: '收藏成功' });
-            } catch (updateError) {
-              logger.error(`批量添加收藏中更新图片失败 - ImageID: ${imageId}, 错误: ${updateError.message}`);
-              results.failed.push({ imageId, error: updateError.message });
+        // 批量更新未收藏的图片
+        if (nonFavoriteImageIds.length > 0) {
+          await Image.update(
+            { favorite: true },
+            { 
+              where: { id: nonFavoriteImageIds, userId },
+              transaction: t 
             }
-          }
+          );
         }
 
         await t.commit();
+
+        // 准备返回结果
+        const results = {
+          succeeded: nonFavoriteImageIds.map(id => ({ imageId: id, message: '收藏成功' })),
+          skipped: favoriteImageIds.map(id => ({ imageId: id, message: '图片已收藏' })),
+          invalid: invalidImageIds.map(id => ({ imageId: id, error: '图片不存在或不属于当前用户' })),
+          failed: []
+        };
 
         ctx.body = {
           code: 200,
@@ -222,13 +212,13 @@ class FavoriteController {
           data: results
         };
 
-      } catch (transactionError) {
+      } catch (error) {
         await t.rollback();
-        logger.error(`批量添加收藏事务失败:`, transactionError);
+        logger.error(`批量添加收藏事务失败: ${error.message}`);
         ctx.status = 500;
         ctx.body = {
           code: 500,
-          message: '批量添加收藏处理失败: ' + transactionError.message
+          message: '批量添加收藏处理失败: ' + error.message
         };
       }
     } catch (error) {
@@ -247,7 +237,7 @@ class FavoriteController {
       const { imageIds } = ctx.request.body;
       const userId = ctx.state.user.id;
 
-      // 增强参数验证
+      // 参数验证
       if (!ctx.request.body || !imageIds || !Array.isArray(imageIds) || imageIds.length === 0) {
         ctx.status = 400;
         ctx.body = {
@@ -258,58 +248,48 @@ class FavoriteController {
       }
 
       const t = await seq.transaction();
-      const results = {
-        succeeded: [],
-        skipped: [], // 未收藏的图片
-        invalid: [], // 不存在的图片
-        failed: []   // 更新失败的图片
-      };
-
+      
       try {
-        // 1. 查找所有指定ID的图片
+        // 查询所有指定ID的图片
         const images = await Image.findAll({
-          where: { id: imageIds, userId: userId }, // 确保只操作当前用户的图片
+          where: { id: imageIds, userId },
           transaction: t
         });
 
-        const existingImageMap = new Map(images.map(img => [img.id, img]));
+        // 处理ID类型兼容性，转换所有ID为字符串进行比对
+        const foundImageIds = images.map(img => String(img.id));
+        const inputImageIds = imageIds.map(id => String(id));
+        
+        // 找出不存在的图片ID
+        const invalidImageIds = inputImageIds.filter(id => !foundImageIds.includes(id));
+        
+        // 识别已收藏和未收藏的图片
+        const favoriteImages = images.filter(img => img.favorite);
+        const nonFavoriteImages = images.filter(img => !img.favorite);
+        
+        const favoriteImageIds = favoriteImages.map(img => img.id);
+        const nonFavoriteImageIds = nonFavoriteImages.map(img => img.id);
 
-        for (const imageId of imageIds) {
-          // 查找图片对象，支持数值ID和字符串ID
-          let image = existingImageMap.get(imageId);
-          
-          // 如果找不到，尝试转换类型再查找
-          if (!image) {
-            // 如果imageId是字符串，尝试转为数字
-            if (typeof imageId === 'string') {
-              image = existingImageMap.get(parseInt(imageId));
-            } 
-            // 如果imageId是数字，尝试转为字符串
-            else if (typeof imageId === 'number') {
-              image = existingImageMap.get(String(imageId));
+        // 批量更新已收藏的图片
+        if (favoriteImageIds.length > 0) {
+          await Image.update(
+            { favorite: false },
+            { 
+              where: { id: favoriteImageIds, userId },
+              transaction: t 
             }
-          }
-
-          if (!image) {
-            results.invalid.push({ imageId, error: '图片不存在或不属于当前用户' });
-          } else if (!image.favorite) {
-            results.skipped.push({ imageId, message: '图片未收藏' });
-          } else {
-            try {
-              // 2. 批量更新Image表的favorite字段
-              await Image.update(
-                { favorite: false },
-                { where: { id: imageId, userId }, transaction: t }
-              );
-              results.succeeded.push({ imageId, message: '取消收藏成功' });
-            } catch (updateError) {
-              logger.error(`批量取消收藏中更新图片失败 - ImageID: ${imageId}, 错误: ${updateError.message}`);
-              results.failed.push({ imageId, error: updateError.message });
-            }
-          }
+          );
         }
 
         await t.commit();
+
+        // 准备返回结果
+        const results = {
+          succeeded: favoriteImageIds.map(id => ({ imageId: id, message: '取消收藏成功' })),
+          skipped: nonFavoriteImageIds.map(id => ({ imageId: id, message: '图片未收藏' })),
+          invalid: invalidImageIds.map(id => ({ imageId: id, error: '图片不存在或不属于当前用户' })),
+          failed: []
+        };
 
         ctx.body = {
           code: 200,
@@ -317,13 +297,13 @@ class FavoriteController {
           data: results
         };
 
-      } catch (transactionError) {
+      } catch (error) {
         await t.rollback();
-        logger.error(`批量取消收藏事务失败:`, transactionError);
+        logger.error(`批量取消收藏事务失败: ${error.message}`);
         ctx.status = 500;
         ctx.body = {
           code: 500,
-          message: '批量取消收藏处理失败: ' + transactionError.message
+          message: '批量取消收藏处理失败: ' + error.message
         };
       }
     } catch (error) {
@@ -332,44 +312,6 @@ class FavoriteController {
       ctx.body = {
         code: 500,
         message: '批量取消收藏失败: ' + error.message
-      };
-    }
-  }
-
-  // 检查收藏状态
-  async checkFavoriteStatus(ctx) {
-    try {
-      const { imageId } = ctx.params;
-      const userId = ctx.state.user.id;
-
-      // 直接从Image表中查找图片并检查favorite状态
-      const image = await Image.findOne({
-        where: { id: imageId, userId }
-      });
-
-      if (!image) {
-        ctx.status = 404;
-        ctx.body = {
-          code: 404,
-          message: '图片不存在或不属于当前用户'
-        };
-        return;
-      }
-
-      ctx.body = {
-        code: 200,
-        message: '获取收藏状态成功',
-        data: {
-          isFavorite: image.favorite,
-          // 不再需要 favoriteId，因为直接从 Image 获取状态
-        }
-      };
-    } catch (error) {
-      logger.error(`检查收藏状态失败: ${error.message}`);
-      ctx.status = 500;
-      ctx.body = {
-        code: 500,
-        message: '检查收藏状态失败: ' + error.message
       };
     }
   }
