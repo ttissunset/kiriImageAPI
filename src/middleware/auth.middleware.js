@@ -1,6 +1,7 @@
 const TokenUtil = require('../utils/token.util');
 const logger = require('../utils/logger');
 const User = require('../model/user.model');
+const { generateVerificationCode, buildEmailHtml, sendEmail, UAParser } = require('./email.middleware');
 
 // 验证JWT令牌的中间件
 const auth = async (ctx, next) => {
@@ -118,7 +119,95 @@ const adminAuth = async (ctx, next) => {
   }
 };
 
-module.exports = {
-  auth,
-  adminAuth
-}; 
+// 临时存储验证码，生产环境应替换为Redis等持久化存储
+const verificationCodes = {};
+
+/**
+ * 发送邮箱验证码中间件
+ * @param {Object} ctx - Koa上下文
+ * @param {Function} next - 下一个中间件函数
+ */
+const sendVerificationCode = async (ctx, next) => {
+  const { email } = ctx.request.body;
+
+  if (!email) {
+    ctx.status = 400;
+    ctx.body = { code: -1, message: '缺少邮箱地址' };
+    return;
+  }
+
+  const verificationCode = generateVerificationCode();
+
+  // 获取用户IP和浏览器信息
+  logger.info('Received headers:', ctx.headers);
+  logger.info('ctx.request.ip:', ctx.request.ip);
+  const ip = ctx.request.ip;
+  const ua = ctx.headers['user-agent'];
+  const parser = new UAParser();
+  parser.setUA(ua);
+  const browserInfo = parser.getBrowser().name + ' ' + parser.getBrowser().version;
+  const now = new Date();
+  const time = now.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  const htmlContent = buildEmailHtml(verificationCode, ip, browserInfo, time);
+
+  const result = await sendEmail(email, '您的KiriImage邮箱验证码', htmlContent);
+
+  if (result.success) {
+    // 存储验证码和过期时间
+    verificationCodes[email] = {
+      code: verificationCode,
+      expires: Date.now() + 5 * 60 * 1000, // 5分钟有效期
+    };
+    ctx.body = { code: 0, message: '验证码已发送，请查收邮件' };
+  } else {
+    ctx.status = 500;
+    ctx.body = { code: -1, message: '验证码发送失败', detail: result.error };
+  }
+
+  await next();
+};
+
+/**
+ * 验证邮箱验证码中间件
+ * @param {Object} ctx - Koa上下文
+ * @param {Function} next - 下一个中间件函数
+ */
+const verifyVerificationCode = async (ctx, next) => {
+  const { email, code } = ctx.request.body;
+
+  if (!email || !code) {
+    ctx.status = 400;
+    ctx.body = { code: -1, message: '缺少邮箱或验证码' };
+    return;
+  }
+
+  const storedCodeInfo = verificationCodes[email];
+
+  if (!storedCodeInfo) {
+    ctx.status = 400;
+    ctx.body = { code: -1, message: '请先获取验证码' };
+    return;
+  }
+
+  if (Date.now() > storedCodeInfo.expires) {
+    ctx.status = 400;
+    ctx.body = { code: -1, message: '验证码已过期' };
+    // 清除过期验证码
+    delete verificationCodes[email];
+    return;
+  }
+
+  if (storedCodeInfo.code !== code) {
+    ctx.status = 400;
+    ctx.body = { code: -1, message: '验证码不正确' };
+    return;
+  }
+
+  // 验证成功后清除验证码
+  delete verificationCodes[email];
+
+  await next();
+};
+
+module.exports = { auth, adminAuth }; 

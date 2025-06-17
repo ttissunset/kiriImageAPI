@@ -4,6 +4,8 @@ const User = require("../model/user.model");
 const TokenUtil = require("../utils/token.util");
 const logger = require("../utils/logger");
 const statsController = require("./stats.controller");
+const { generateVerificationCode, buildEmailHtml, sendEmail, UAParser } = require("../middleware/email.middleware");
+const { verificationCodes } = require("../utils/verificationCodeStore");
 
 /**
  * 异步记录登录信息，不阻塞主流程
@@ -107,53 +109,128 @@ class UserController {
     }
   }
 
-  // 登录接口
-  async login(ctx, next) {
+  // 发送登录验证码
+  async sendVerificationCodeForLogin(ctx) {
     try {
-      const { username, password } = ctx.request.body;
+      const { username } = ctx.request.body;
+
+      if (!username) {
+        ctx.status = 400;
+        ctx.body = { code: -1, message: '缺少用户名' };
+        return;
+      }
+
+      const user = await User.findOne({ where: { username } });
+      if (!user) {
+        ctx.status = 404;
+        ctx.body = { code: -1, message: '用户不存在' };
+        return;
+      }
+
+      if (!user.email) {
+        ctx.status = 400;
+        ctx.body = { code: -1, message: '该用户未绑定邮箱' };
+        return;
+      }
+
+      const verificationCode = generateVerificationCode();
+      const ip = ctx.request.ip;
+      const ua = ctx.headers['user-agent'];
+      const parser = new UAParser();
+      parser.setUA(ua);
+      const browserInfo = parser.getBrowser().name + ' ' + parser.getBrowser().version;
+      const now = new Date();
+      const time = now.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+      const htmlContent = buildEmailHtml(verificationCode, ip, browserInfo, time);
+      const result = await sendEmail(user.email, '您的KiriImage登录验证码', htmlContent);
+
+      if (result.success) {
+        verificationCodes[user.email] = {
+          code: verificationCode,
+          expires: Date.now() + 5 * 60 * 1000, // 5分钟有效期
+        };
+        ctx.body = { code: 200, message: '验证码已发送，请查收邮件' };
+      } else {
+        logger.error(`发送登录验证码失败到 ${user.email}: ${result.error}`);
+        ctx.status = 500;
+        ctx.body = { code: 400, message: '验证码发送失败', detail: result.error };
+      }
+    } catch (err) {
+      logger.error(`发送登录验证码异常: ${err.message}`);
+      ctx.status = 500;
+      ctx.body = { code: 500, message: '服务器内部错误' };
+    }
+  }
+
+  // 登录接口
+  async login(ctx) {
+    try {
+      const { username, password, code } = ctx.request.body;
 
       // 参数验证
-      if (!username || !password) {
+      if (!username || !password || !code) {
         ctx.status = 400;
         ctx.body = {
           code: 400,
-          message: "用户名和密码不能为空"
+          message: "用户名、密码和验证码不能为空"
         };
 
         // 异步记录登录失败 - 参数错误
         recordLoginAsync(ctx, {
           username: username || '未提供用户名',
           status: 'failure',
-          failReason: '用户名和密码不能为空'
+          failReason: '用户名、密码或验证码不能为空'
         });
 
         return;
       }
 
-      // 查找用户
-      const user = await User.findOne({
-        where: { username }
-      });
+      // 验证码校验
+      const user = await User.findOne({ where: { username } });
 
-      // 用户不存在
       if (!user) {
         ctx.status = 404;
-        ctx.body = {
-          code: 404,
-          message: "用户不存在"
-        };
-
-        // 异步记录登录失败 - 用户不存在
-        recordLoginAsync(ctx, {
-          username,
-          status: 'failure',
-          failReason: '用户不存在'
-        });
-
+        ctx.body = { code: 404, message: "用户不存在" };
+        recordLoginAsync(ctx, { username, status: 'failure', failReason: '用户不存在' });
         return;
       }
 
-      // 密码验证
+      if (!user.email) {
+        ctx.status = 400;
+        ctx.body = { code: -1, message: '该用户未绑定邮箱，无法进行验证码登录' };
+        recordLoginAsync(ctx, { username, status: 'failure', failReason: '未绑定邮箱' });
+        return;
+      }
+
+      const storedCodeInfo = verificationCodes[user.email];
+
+      if (!storedCodeInfo) {
+        ctx.status = 400;
+        ctx.body = { code: -1, message: '请先获取验证码' };
+        recordLoginAsync(ctx, { username, status: 'failure', failReason: '未获取验证码' });
+        return;
+      }
+
+      if (Date.now() > storedCodeInfo.expires) {
+        ctx.status = 400;
+        ctx.body = { code: -1, message: '验证码已过期' };
+        delete verificationCodes[user.email];
+        recordLoginAsync(ctx, { username, status: 'failure', failReason: '验证码过期' });
+        return;
+      }
+
+      if (storedCodeInfo.code !== code) {
+        ctx.status = 400;
+        ctx.body = { code: -1, message: '验证码不正确' };
+        recordLoginAsync(ctx, { username, status: 'failure', failReason: '验证码不正确' });
+        return;
+      }
+
+      // 验证成功后清除验证码
+      delete verificationCodes[user.email];
+
+      // 密码验证 (在验证码通过后进行)
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
         ctx.status = 401;
@@ -161,14 +238,11 @@ class UserController {
           code: 401,
           message: "密码错误"
         };
-
-        // 异步记录登录失败 - 密码错误
         recordLoginAsync(ctx, {
           username,
           status: 'failure',
           failReason: '密码错误'
         });
-
         return;
       }
 

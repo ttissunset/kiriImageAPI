@@ -11,6 +11,7 @@ const parameter = require("koa-parameter");
 
 // 创建koa实例
 const app = new Koa();
+app.proxy = true;
 
 // 从环境变量中获取端口
 const { APP_PORT } = require("./config/config");
@@ -21,7 +22,7 @@ require('./model/association');
 const router = require("./router/index");
 
 // 使用koda-body中间件对body参数进行处理
-app.use(koaBody({ 
+app.use(koaBody({
   multipart: true,
   formidable: {
     maxFileSize: 200 * 1024 * 1024 // 设置上传文件大小限制为200MB
